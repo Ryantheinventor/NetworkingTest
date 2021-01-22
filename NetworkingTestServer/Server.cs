@@ -41,6 +41,7 @@ namespace NetworkingTestServer
 
             while (true) 
             {
+
                 //relay client data
                 for (int i = 0; i < clients.Count(); i++) 
                 {
@@ -89,6 +90,7 @@ namespace NetworkingTestServer
                 NetworkStream stream = client.client.GetStream();
                 int i;
                 //Loop to receive all the data sent by the client.
+                //FIX This will hang until a packet is recived currently the only way to stop this is to have the client do super fast ping checks
                 while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
                 {
                     // Translate data bytes to a ASCII string.
@@ -128,15 +130,7 @@ namespace NetworkingTestServer
                             }
                             else if (p.varName == "serverDisconnect")
                             {
-                                //end client connection server side
-                                Console.WriteLine($"{clientIP}-Disconnected:Closed by client");
-                                if (client.gameCode != "aaaa")
-                                {
-                                    //TODO remove client from room
-                                }
-
-                                client.client.Close();
-                                clients.Remove(client);
+                                removeClient(client, "Closed by client");
                                 return;
                             }
                             else if (p.varName == "PingCheck") 
@@ -166,20 +160,30 @@ namespace NetworkingTestServer
             }
             catch (System.IO.IOException)
             {
-                string clientIP = client.client.Client.RemoteEndPoint.ToString();
-                Console.WriteLine($"{clientIP}-Disconnected:Connection may have been closed by client incorectly");
-                client.client.Close();
-                clients.Remove(client);
+                removeClient(client, "Connection may have been closed by client incorectly");
             }
             catch (System.InvalidOperationException)
             {
-                string clientIP = client.client.Client.RemoteEndPoint.ToString();
-                Console.WriteLine($"{clientIP}-Disconnected:Connection may have been closed by client incorectly");
-                client.client.Close();
-                clients.Remove(client);
+                removeClient(client, "Connection may have been closed by client incorectly");
             }
 
 
+        }
+
+        public static void removeClient(ClientData c, string reason) 
+        {
+            Console.WriteLine($"{c.IP}-Disconnected:{reason}");
+            if (c.gameCode != "aaaa")
+            {
+                rooms[c.gameCode].removeClient(c);
+                if (rooms[c.gameCode].Empty) 
+                {
+                    rooms.Remove(c.gameCode);
+                }
+            }
+            
+            c.client.Close();
+            clients.Remove(c);
         }
 
         public static void sendPacket(DataPacket data, ClientData client)
@@ -211,10 +215,11 @@ namespace NetworkingTestServer
         List<ClientData> roomClients = new List<ClientData>();
         public bool publicRoom = false;
         public bool Full { get => roomClients.Count == Server.roomSize; }
-        
+        public bool Empty { get => roomClients.Count == 0; }
 
 
-        public int addClient(ClientData client) 
+
+        public void addClient(ClientData client) 
         {
             
             if (roomClients.Count < Server.roomSize) 
@@ -227,7 +232,24 @@ namespace NetworkingTestServer
                 roomClients.Add(client);
 
             }
-            return -1;
+        }
+
+        public void removeClient(ClientData client) 
+        {
+            if (roomClients.Contains(client)) 
+            {
+                int id = clientID(client);
+                roomClients.Remove(client);
+                foreach (ClientData c in roomClients)
+                {
+                    if (c != client)
+                    {
+                        Server.sendPacket(new DataPacket() { isEvent = true, varName = "playerLeave", userID = id }, c);
+                    }
+                }
+                
+            }
+
         }
 
         public int clientID(ClientData client) 
@@ -277,10 +299,12 @@ namespace NetworkingTestServer
         public Dictionary<string, bool> bools = new Dictionary<string, bool>();
         public Dictionary<string, float> floats = new Dictionary<string, float>();
         public Dictionary<string, char> chars = new Dictionary<string, char>();
-        public string gameCode = "";
+        public string gameCode = "aaaa";
+        public string IP = "";
         public ClientData(TcpClient client) 
         {
             this.client = client;
+            this.IP = client.Client.RemoteEndPoint.ToString();
         }
     }
 
