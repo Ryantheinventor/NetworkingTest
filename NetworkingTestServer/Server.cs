@@ -90,7 +90,9 @@ namespace NetworkingTestServer
                 NetworkStream stream = client.client.GetStream();
                 int i;
                 //Loop to receive all the data sent by the client.
+                
                 //FIX This will hang until a packet is recived currently the only way to stop this is to have the client do super fast ping checks
+                //if a client lags out then the server will hang on it untill a packet finaly makes it through
                 while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
                 {
                     // Translate data bytes to a ASCII string.
@@ -109,46 +111,46 @@ namespace NetworkingTestServer
                                 {
                                     if (!rooms[p.strData].Full)
                                     {
-                                        rooms[p.strData].addClient(client);
+                                        rooms[p.strData].AddClient(client);
                                         client.gameCode = p.strData;
-                                        sendPacket(new DataPacket() { isEvent = true, varName = "RoomJoin", gameID = p.strData, userID = rooms[p.strData].clientID(client) }, client);
+                                        SendPacket(new DataPacket() { isEvent = true, varName = "RoomJoin", gameID = p.strData, userID = rooms[p.strData].ClientID(client) }, client);
                                         break;
                                     }
                                 }
-                                sendPacket(new DataPacket() { isEvent = true, varName = "RoomJoinFailed" }, client);
+                                SendPacket(new DataPacket() { isEvent = true, varName = "RoomJoinFailed" }, client);
                             }
                             else if (p.varName == "newRoom")
                             {
                                 //create a new room with a new ID and connect user to the room
-                                string newRoomCode = roomCodeGenerator();
+                                string newRoomCode = RoomCodeGenerator();
                                 ServerRoom room = new ServerRoom();
-                                room.addClient(client);
+                                room.AddClient(client);
                                 rooms.Add(newRoomCode, room);
                                 client.gameCode = newRoomCode;
                                 Console.WriteLine("New room:" + newRoomCode);
-                                sendPacket(new DataPacket() { isEvent = true, varName = "RoomHost", gameID = newRoomCode, userID = rooms[newRoomCode].clientID(client) }, client);
+                                SendPacket(new DataPacket() { isEvent = true, varName = "RoomHost", gameID = newRoomCode, userID = rooms[newRoomCode].ClientID(client) }, client);
                             }
                             else if (p.varName == "serverDisconnect")
                             {
-                                removeClient(client, "Closed by client");
+                                RemoveClient(client, "Closed by client");
                                 return;
                             }
                             else if (p.varName == "PingCheck") 
                             {
-                                sendPacket(new DataPacket() { isEvent = true, varName = "PingCheck" }, client);
+                                SendPacket(new DataPacket() { isEvent = true, varName = "PingCheck" }, client);
                                 continue;
                             }
                             else if (p.gameID != "aaaa")
                             {
                                 //if the event is not recognised by the server it is passed along as a game event
-                                rooms[p.gameID].sendDataToRoom(p, client);
+                                rooms[p.gameID].SendDataToRoom(p, client);
                             }
                         }
                         else
                         {
                             if (rooms.ContainsKey(p.gameID))
                             {
-                                rooms[p.gameID].sendDataToRoom(p, client);
+                                rooms[p.gameID].SendDataToRoom(p, client);
                             }
                         }
                         //search for clients with same game code
@@ -160,22 +162,22 @@ namespace NetworkingTestServer
             }
             catch (System.IO.IOException)
             {
-                removeClient(client, "Connection may have been closed by client incorectly");
+                RemoveClient(client, "Connection may have been closed by client incorectly");
             }
             catch (System.InvalidOperationException)
             {
-                removeClient(client, "Connection may have been closed by client incorectly");
+                RemoveClient(client, "Connection may have been closed by client incorectly");
             }
 
 
         }
 
-        public static void removeClient(ClientData c, string reason) 
+        public static void RemoveClient(ClientData c, string reason) 
         {
             Console.WriteLine($"{c.IP}-Disconnected:{reason}");
             if (c.gameCode != "aaaa")
             {
-                rooms[c.gameCode].removeClient(c);
+                rooms[c.gameCode].RemoveClient(c);
                 if (rooms[c.gameCode].Empty) 
                 {
                     rooms.Remove(c.gameCode);
@@ -186,14 +188,14 @@ namespace NetworkingTestServer
             clients.Remove(c);
         }
 
-        public static void sendPacket(DataPacket data, ClientData client)
+        public static void SendPacket(DataPacket data, ClientData client)
         {
             NetworkStream stream = client.client.GetStream();//get data stream
             byte[] msg = DataProcessor.SerializeDataPacket(data);//convert data packet to bytes
             stream.Write(msg, 0, msg.Length);//send data
         }
 
-        private static string roomCodeGenerator() 
+        private static string RoomCodeGenerator() 
         {
             Random random = new Random();
             string code = "";
@@ -219,32 +221,32 @@ namespace NetworkingTestServer
 
 
 
-        public void addClient(ClientData client) 
+        public void AddClient(ClientData client) 
         {
             
             if (roomClients.Count < Server.roomSize) 
             {
                 foreach (ClientData c in roomClients) 
                 {
-                    Server.sendPacket(new DataPacket() { isEvent = true, varName = "newPlayer", userID = roomClients.Count }, c);
-                    Server.sendPacket(new DataPacket() { isEvent = true, varName = "newPlayer", userID = roomClients.IndexOf(c) }, client);
+                    Server.SendPacket(new DataPacket() { isEvent = true, varName = "newPlayer", userID = roomClients.Count }, c);
+                    Server.SendPacket(new DataPacket() { isEvent = true, varName = "newPlayer", userID = roomClients.IndexOf(c) }, client);
                 }
                 roomClients.Add(client);
 
             }
         }
 
-        public void removeClient(ClientData client) 
+        public void RemoveClient(ClientData client) 
         {
             if (roomClients.Contains(client)) 
             {
-                int id = clientID(client);
+                int id = ClientID(client);
                 roomClients.Remove(client);
                 foreach (ClientData c in roomClients)
                 {
                     if (c != client)
                     {
-                        Server.sendPacket(new DataPacket() { isEvent = true, varName = "playerLeave", userID = id }, c);
+                        Server.SendPacket(new DataPacket() { isEvent = true, varName = "playerLeave", userID = id }, c);
                     }
                 }
                 
@@ -252,7 +254,7 @@ namespace NetworkingTestServer
 
         }
 
-        public int clientID(ClientData client) 
+        public int ClientID(ClientData client) 
         {
             return roomClients.IndexOf(client);
         }
@@ -265,14 +267,14 @@ namespace NetworkingTestServer
         /// <summary>
         /// Sends data to all members of this room except client
         /// </summary>
-        public void sendDataToRoom(DataPacket data, ClientData client)
+        public void SendDataToRoom(DataPacket data, ClientData client)
         {
             data.userID = roomClients.IndexOf(client);
             foreach (ClientData c in roomClients)
             {
                 if (c != client) 
                 {
-                    Server.sendPacket(data, c);
+                    Server.SendPacket(data, c);
                 }
             }
         }
@@ -280,11 +282,11 @@ namespace NetworkingTestServer
         /// <summary>
         /// Sends data to all members of this room 
         /// </summary>
-        public void sendDataToRoom(DataPacket data)
+        public void SendDataToRoom(DataPacket data)
         {
             foreach (ClientData c in roomClients)
             {
-                Server.sendPacket(data, c);
+                Server.SendPacket(data, c);
             }
         }
 
@@ -304,8 +306,7 @@ namespace NetworkingTestServer
         public ClientData(TcpClient client) 
         {
             this.client = client;
-            this.IP = client.Client.RemoteEndPoint.ToString();
+            IP = client.Client.RemoteEndPoint.ToString();
         }
     }
-
 }
