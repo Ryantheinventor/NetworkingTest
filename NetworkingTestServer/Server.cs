@@ -97,7 +97,7 @@ namespace NetworkingTestServer
                     NetworkStream stream = client.client.GetStream();
                     int i;
                     //Loop to receive all the data sent by the client.
-
+                    
                     //FIX This will hang until a packet is recived currently the only way to stop this is to have the client do super fast ping checks
                     //if a client lags out then the server will hang on it untill a packet finaly makes it through
                     while ((i = stream.Read(bytes, 0, bytes.Length)) != 0)
@@ -178,23 +178,24 @@ namespace NetworkingTestServer
 
         public static void RunEvents() 
         {
-            for (int i = events.Count - 1; i >= 0; i--) 
+            int eventCount = events.Count;
+            for (int i = 0; i < eventCount; i++)
             {
                 try
                 {
-                    if (events[i] == null) 
+                    if (events[0] == null) 
                     {
                         continue;
                     }
-                    DataPacket p = events[i].data;
-                    ClientData client = events[i].client;
+                    DataPacket p = events[0].data;
+                    ClientData client = events[0].client;
                     if (!client.client.Connected) 
                     {
                         if (p.varName == "Disconnect")
                         {
                             RemoveClient(client, p.strData);
                         }
-                        events.RemoveAt(i);
+                        events.RemoveAt(0);
                         continue;
                     }
                     if (p.varName == "connectToRoom")
@@ -207,7 +208,7 @@ namespace NetworkingTestServer
                                 rooms[p.strData].AddClient(client);
                                 client.gameCode = p.strData;
                                 SendPacket(new DataPacket() { isEvent = true, varName = "RoomJoin", gameID = p.strData, userID = rooms[p.strData].ClientID(client) }, client);
-                                events.RemoveAt(i);
+                                events.RemoveAt(0);
                                 continue;
                             }
                         }
@@ -250,7 +251,7 @@ namespace NetworkingTestServer
                 {
                     Console.WriteLine(e.Message);
                 }
-                events.RemoveAt(i);
+                events.RemoveAt(0);
             }
         }
 
