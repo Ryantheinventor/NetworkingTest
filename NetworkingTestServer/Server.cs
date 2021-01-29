@@ -29,7 +29,7 @@ namespace NetworkingTestServer
         public static void Main()
         {
             Int32 port = 7777;// Set the TcpListener on port 7777.
-            IPAddress localAddr = IPAddress.Parse("10.0.0.4");// Set the TcpListener on IP 10.0.0.4 (my local IP)
+            IPAddress localAddr = IPAddress.Parse("10.0.0.4");// Set the TcpListener on IP 10.0.0.4 (must be server's local IP)
             server = new TcpListener(localAddr, port);// TcpListener server = new TcpListener(port);        
             server.Start();// Start listening for client requests.
             
@@ -144,10 +144,10 @@ namespace NetworkingTestServer
 
         public static void RemoveClient(ClientData c, string reason) 
         {
-            try
+            if (!c.Disconnected)
             {
                 Console.WriteLine($"{c.IP}-Disconnected:{reason}");
-                if (c.gameCode != "aaaa")
+                if (c.gameCode != "aaaa" && rooms.ContainsKey(c.gameCode))
                 {
                     rooms[c.gameCode].RemoveClient(c);
                     if (rooms[c.gameCode].Empty)
@@ -156,13 +156,10 @@ namespace NetworkingTestServer
                         Console.WriteLine("Room closed:" + c.gameCode);
                     }
                 }
+                c.client.Close();
+                clients.Remove(c);
+                c.Disconnected = true;
             }
-            catch (KeyNotFoundException e) 
-            {
-                Console.WriteLine("Room already closed:" + c.gameCode);
-            }
-            c.client.Close();
-            clients.Remove(c);
         }
 
         public static void SendPacket(DataPacket data, ClientData client)
@@ -229,12 +226,19 @@ namespace NetworkingTestServer
                     }
                     else if (p.varName == "serverDisconnect")
                     {
+                        SendPacket(new DataPacket() { isEvent = true, varName = "ServerDisconnect" }, client);
                         RemoveClient(client, "Closed by client");
                     }
-                    
                     else if (p.varName == "PingCheck")
                     {
                         SendPacket(new DataPacket() { isEvent = true, varName = "PingCheck" }, client);
+                    }
+                    else 
+                    {
+                        if (rooms.ContainsKey(p.gameID))
+                        {
+                            rooms[p.gameID].SendDataToRoom(p, client);
+                        }
                     }
 
                 }
@@ -298,11 +302,13 @@ namespace NetworkingTestServer
             {
                 int id = ClientID(client);
                 roomClients.Remove(client);
+                
                 foreach (ClientData c in roomClients)
                 {
                     if (c != client)
                     {
-                        Server.SendPacket(new DataPacket() { isEvent = true, varName = "playerLeave", userID = id }, c);
+                        int cId = ClientID(c);
+                        Server.SendPacket(new DataPacket() { isEvent = true, varName = "playerLeave", intData = id, userID = cId }, c);
                     }
                 }
                 
@@ -345,6 +351,7 @@ namespace NetworkingTestServer
 
     public class ClientData 
     {
+        public bool Disconnected = false;
         public TcpClient client = null;
         public string gameCode = "aaaa";
         public string IP = "";
